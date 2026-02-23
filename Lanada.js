@@ -1,141 +1,286 @@
-// Lanada.js - Official Engine
-const Lanada = (function() {
-  function createEnv(outputCallback) {
-    const env = {
-      print: (...args) => outputCallback(args.join(' ')),
-      assert: (v,msg)=>{if(!v) throw new Error(msg||"assertion failed"); return v},
-      error: (msg)=>{throw new Error(msg)},
-      pcall: (fn,...args)=>{try{return [true,fn(...args)]}catch(e){return [false,e]}},
-      xpcall: (fn,err)=>{try{return fn()}catch(e){return err(e)}},
-      load: (s)=>new Function(s),
-      loadstring: (s)=>new Function(s),
-      dofile: (f)=>outputCallback("Cannot load file in browser\n"),
+const Lanada = {
 
-      math: {
-        abs: Math.abs, acos: Math.acos, asin: Math.asin, atan: Math.atan,
-        ceil: Math.ceil, cos: Math.cos, exp: Math.exp, floor: Math.floor,
-        log: Math.log, max: Math.max, min: Math.min, pow: Math.pow,
-        random: (a,b)=>b!==undefined?Math.floor(Math.random()*(b-a+1))+a:Math.random(),
-        round: Math.round, sin: Math.sin, sqrt: Math.sqrt, tan: Math.tan, pi: Math.PI,
-        clamp: (v,min,max)=>Math.min(Math.max(v,min),max)
-      },
-
-      string: {
-        byte: (s,i,j)=>s.charCodeAt(i-1),
-        char: (...codes)=>String.fromCharCode(...codes),
-        find: (s,p)=>s.indexOf(p)+1,
-        format: (...args)=>args.join(' '),
-        len: (s)=>s.length,
-        lower: (s)=>s.toLowerCase(),
-        upper: (s)=>s.toUpperCase(),
-        rep: (s,n)=>s.repeat(n),
-        sub: (s,i,j)=>s.substring(i-1,j),
-        reverse: (s)=>s.split('').reverse().join('')
-      },
-
-      table: {
-        insert: (arr,val,pos)=>{if(pos!==undefined) arr.splice(pos-1,0,val); else arr.push(val)},
-        remove: (arr,pos)=>{if(pos!==undefined) return arr.splice(pos-1,1)[0]; else return arr.pop()},
-        sort: (arr,cmp)=>arr.sort(cmp),
-        concat: (arr,sep)=>arr.join(sep||","),
-        pack: (...args)=>args,
-        unpack: (arr)=>[...arr],
-        shuffle: (arr)=>arr.sort(()=>Math.random()-0.5),
-        sum: (arr)=>arr.reduce((s,v)=>s+v,0),
-        avg: (arr)=>arr.reduce((s,v)=>s+v,0)/arr.length
-      },
-
-      range: (a,b)=>{let arr=[];for(let i=a;i<=b;i++) arr.push(i); return arr;},
-      randomChoice: (arr)=>arr[Math.floor(Math.random()*arr.length)],
-      deepCopy: (obj)=>JSON.parse(JSON.stringify(obj))
-    };
-    return env;
-  }
-
-  function preprocessLua(code) {
-    code = code.replace(/--.*$/gm,""); // remove comments
-    code = code.replace(/\blocal\s+([a-zA-Z_][a-zA-Z0-9_]*)/g, 'var $1'); // convert local to var
-    code = code.replace(/function\s+(\w+)\s*\((.*?)\)/g, 'function $1($2){');
-    code = code.replace(/if\s+(.*?)\s*then/g, 'if($1){');
-    code = code.replace(/elseif\s+(.*?)\s*then/g, '}else if($1){');
-    code = code.replace(/else/g, '}else{');
-    code = code.replace(/for\s+(\w+)\s*=\s*(\d+)\s*,\s*(\d+)\s*do/g, 'for(var $1=$2;$1<=$3;$1++){');
-    code = code.replace(/repeat/g, 'do{');
-    code = code.replace(/until\s+(.*)/g, '}while(!($1))');
-    code = code.replace(/\bend\b/g, '}');
-
-    // Add semicolons at the end of lines to avoid JS parsing errors
-    code = code.split('\n').map(line=>line.trim()).filter(line=>line.length>0).join(';\n') + ';';
-    return code;
-  }
-
-  return {
-    createEnv,
-    preprocessLua,
-    run: function(code, outputCallback = console.log) {
-      const env = createEnv(outputCallback);
-      try {
-        const jsCode = preprocessLua(code);
-        const keys = Object.keys(env);
-        const values = Object.values(env);
-        const func = new Function(...keys, jsCode);
-        func(...values);
-      } catch(err) {
-        outputCallback('Error: ' + err.message);
-      }
+  // ======================
+  // TOKENIZER
+  // ======================
+  tokenize(code) {
+    const tokens = [];
+    const regex = /\s*(=>|==|<=|>=|[A-Za-z_]\w*|\d+|"[^"]*"|[+\-*/=(),.]|\S)\s*/g;
+    let match;
+    while ((match = regex.exec(code)) !== null) {
+      tokens.push(match[1]);
     }
-  };
-})();
-      // Table
-      table: {
-        insert: (arr,val,pos)=>{if(pos!==undefined) arr.splice(pos-1,0,val); else arr.push(val)},
-        remove: (arr,pos)=>{if(pos!==undefined) return arr.splice(pos-1,1)[0]; else return arr.pop()},
-        sort: (arr,cmp)=>arr.sort(cmp),
-        concat: (arr,sep)=>arr.join(sep||","),
-        pack: (...args)=>args,
-        unpack: (arr)=>[...arr],
-        shuffle: (arr)=>arr.sort(()=>Math.random()-0.5),
-        sum: (arr)=>arr.reduce((s,v)=>s+v,0),
-        avg: (arr)=>arr.reduce((s,v)=>s+v,0)/arr.length
-      },
+    return tokens;
+  },
 
-      // Helpers
-      range: (a,b)=>{let arr=[];for(let i=a;i<=b;i++) arr.push(i); return arr;},
-      randomChoice: (arr)=>arr[Math.floor(Math.random()*arr.length)],
-      deepCopy: (obj)=>JSON.parse(JSON.stringify(obj))
-    };
-    return env;
-  }
+  // ======================
+  // PARSER
+  // ======================
+  parse(tokens) {
+    let current = 0;
 
-  function preprocessLua(code) {
-    code = code.replace(/--.*$/gm,""); // remove comments
-    code = code.replace(/\blocal\s+/g, 'var ');
-    code = code.replace(/function\s+(\w+)\s*\((.*?)\)/g, 'function $1($2){');
-    code = code.replace(/if\s+(.*?)\s*then/g, 'if($1){');
-    code = code.replace(/elseif\s+(.*?)\s*then/g, '}else if($1){');
-    code = code.replace(/else/g, '}else{');
-    code = code.replace(/for\s+(\w+)\s*=\s*(\d+)\s*,\s*(\d+)\s*do/g, 'for(var $1=$2;$1<=$3;$1++){');
-    code = code.replace(/repeat/g, 'do{');
-    code = code.replace(/until\s+(.*)/g, '}while(!($1))');
-    code = code.replace(/\bend\b/g, '}');
-    code = code.split('\n').map(line=>line.trim()).join(';\n'); // semicolons
-    return code;
-  }
-
-  return {
-    createEnv,
-    preprocessLua,
-    run: function(code, outputCallback = console.log) {
-      const env = createEnv(outputCallback);
-      try {
-        const jsCode = preprocessLua(code);
-        const keys = Object.keys(env);
-        const values = Object.values(env);
-        const func = new Function(...keys, jsCode);
-        func(...values);
-      } catch(err) {
-        outputCallback('Error: ' + err.message);
+    const peek = () => tokens[current];
+    const consume = (expected) => {
+      const token = tokens[current];
+      if (expected && token !== expected) {
+        throw new Error(`Expected '${expected}' but got '${token}'`);
       }
+      current++;
+      return token;
+    };
+
+    function parseProgram() {
+      const body = [];
+      while (current < tokens.length) {
+        body.push(parseStatement());
+      }
+      return { type: "Program", body };
     }
-  };
-})();
+
+    function parseStatement() {
+      const token = peek();
+
+      if (token === "local") {
+        consume("local");
+        const name = consume();
+        consume("=");
+        const value = parseExpression();
+        return { type: "VarDecl", name, value };
+      }
+
+      if (token === "print") {
+        consume("print");
+        consume("(");
+        const args = [];
+        while (peek() !== ")") {
+          args.push(parseExpression());
+          if (peek() === ",") consume(",");
+        }
+        consume(")");
+        return { type: "Print", args };
+      }
+
+      if (token === "if") {
+        consume("if");
+        const condition = parseExpression();
+        consume("then");
+
+        const body = [];
+        while (peek() !== "end" && peek() !== "else") {
+          body.push(parseStatement());
+        }
+
+        let elseBody = [];
+        if (peek() === "else") {
+          consume("else");
+          while (peek() !== "end") {
+            elseBody.push(parseStatement());
+          }
+        }
+
+        consume("end");
+
+        return { type: "If", condition, body, elseBody };
+      }
+
+      if (token === "for") {
+        consume("for");
+        const varName = consume();
+        consume("=");
+        const start = parseExpression();
+        consume(",");
+        const end = parseExpression();
+        consume("do");
+
+        const body = [];
+        while (peek() !== "end") {
+          body.push(parseStatement());
+        }
+        consume("end");
+
+        return { type: "For", varName, start, end, body };
+      }
+
+      if (token === "function") {
+        consume("function");
+        const name = consume();
+        consume("(");
+        const params = [];
+        while (peek() !== ")") {
+          params.push(consume());
+          if (peek() === ",") consume(",");
+        }
+        consume(")");
+
+        const body = [];
+        while (peek() !== "end") {
+          body.push(parseStatement());
+        }
+        consume("end");
+
+        return { type: "Function", name, params, body };
+      }
+
+      if (/^[A-Za-z_]\w*$/.test(token) && tokens[current + 1] === "=") {
+        const name = consume();
+        consume("=");
+        const value = parseExpression();
+        return { type: "Assign", name, value };
+      }
+
+      throw new Error("Unexpected token: " + token);
+    }
+
+    function parseExpression() {
+      return parseAddition();
+    }
+
+    function parseAddition() {
+      let left = parseMultiplication();
+      while (peek() === "+" || peek() === "-") {
+        const operator = consume();
+        const right = parseMultiplication();
+        left = { type: "Binary", operator, left, right };
+      }
+      return left;
+    }
+
+    function parseMultiplication() {
+      let left = parsePrimary();
+      while (peek() === "*" || peek() === "/") {
+        const operator = consume();
+        const right = parsePrimary();
+        left = { type: "Binary", operator, left, right };
+      }
+      return left;
+    }
+
+    function parsePrimary() {
+      const token = peek();
+
+      if (/^\d+$/.test(token)) {
+        consume();
+        return { type: "Number", value: token };
+      }
+
+      if (/^".*"$/.test(token)) {
+        consume();
+        return { type: "String", value: token };
+      }
+
+      if (token === "string") {
+        consume("string");
+        consume(".");
+        consume("reverse");
+        consume("(");
+        const value = parseExpression();
+        consume(")");
+        return { type: "Reverse", value };
+      }
+
+      if (/^[A-Za-z_]\w*$/.test(token)) {
+        consume();
+        return { type: "Variable", name: token };
+      }
+
+      if (token === "(") {
+        consume("(");
+        const expr = parseExpression();
+        consume(")");
+        return expr;
+      }
+
+      throw new Error("Invalid expression: " + token);
+    }
+
+    return parseProgram();
+  },
+
+  // ======================
+  // COMPILER
+  // ======================
+  compile(node) {
+    switch (node.type) {
+
+      case "Program":
+        return node.body.map(n => this.compile(n)).join("\n");
+
+      case "VarDecl":
+        return `let ${node.name} = ${this.compile(node.value)};`;
+
+      case "Assign":
+        return `${node.name} = ${this.compile(node.value)};`;
+
+      case "Print":
+        return `print(${node.args.map(a => this.compile(a)).join(", ")});`;
+
+      case "Binary":
+        return `(${this.compile(node.left)} ${node.operator} ${this.compile(node.right)})`;
+
+      case "If":
+        return `
+if (${this.compile(node.condition)}) {
+${node.body.map(b => this.compile(b)).join("\n")}
+}
+${node.elseBody.length ? `
+else {
+${node.elseBody.map(b => this.compile(b)).join("\n")}
+}` : ""}
+`;
+
+      case "For":
+        return `
+for (let ${node.varName} = ${this.compile(node.start)};
+     ${node.varName} <= ${this.compile(node.end)};
+     ${node.varName}++) {
+${node.body.map(b => this.compile(b)).join("\n")}
+}
+`;
+
+      case "Function":
+        return `
+function ${node.name}(${node.params.join(", ")}) {
+${node.body.map(b => this.compile(b)).join("\n")}
+}
+`;
+
+      case "Number":
+        return node.value;
+
+      case "String":
+        return node.value;
+
+      case "Variable":
+        return node.name;
+
+      case "Reverse":
+        return `${this.compile(node.value)}.split('').reverse().join('')`;
+
+      default:
+        throw new Error("Unknown node type: " + node.type);
+    }
+  },
+
+  // ======================
+  // RUNNER (SANDBOXED)
+  // ======================
+  run(code, output = console.log) {
+    try {
+      const tokens = this.tokenize(code);
+      const ast = this.parse(tokens);
+      const js = this.compile(ast);
+
+      const sandbox = {
+        print: (...args) => output(...args)
+      };
+
+      const fn = new Function(...Object.keys(sandbox), `"use strict";\n${js}`);
+      fn(...Object.values(sandbox));
+
+    } catch (err) {
+      output("Error: " + err.message);
+    }
+  }
+};
+
+export default Lanada;
