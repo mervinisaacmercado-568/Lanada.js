@@ -1,6 +1,6 @@
-// lanada.js
-
+// Lanada.js – Robust Lua-like JS engine
 const Lanada = (function() {
+
   // Create Lua-like environment
   function createEnv(outputCallback) {
     return {
@@ -12,7 +12,7 @@ const Lanada = (function() {
         ceil: Math.ceil, cos: Math.cos, exp: Math.exp, floor: Math.floor,
         log: Math.log, max: Math.max, min: Math.min, pow: Math.pow,
         random: (a,b)=>b!==undefined?Math.floor(Math.random()*(b-a+1))+a:Math.random(),
-        round: (n)=>Math.round(n), sin: Math.sin, sqrt: Math.sqrt,
+        round: Math.round, sin: Math.sin, sqrt: Math.sqrt,
         tan: Math.tan, pi: Math.PI, e: Math.E
       },
 
@@ -71,9 +71,15 @@ const Lanada = (function() {
     };
   }
 
-  // Preprocess Lua to JS
+  // Preprocess Lua code to JS safely
   function preprocessLua(code) {
-    code = code.replace(/--.*$/gm,""); // remove comments
+    // 1. Remove comments safely
+    code = code.replace(/--.*$/gm, '');
+
+    // 2. Replace 'local' with 'var'
+    code = code.replace(/\blocal\s+/g, 'var ');
+
+    // 3. Replace loops and if/else
     code = code.replace(/for\s+(\w+)\s*=\s*(\d+)\s*,\s*(\d+)\s*do/g, 'for(let $1=$2;$1<=$3;$1++){');
     code = code.replace(/function\s+(\w+)\s*\((.*?)\)/g, 'function $1($2){');
     code = code.replace(/if\s+(.*?)\s*then/g, 'if($1){');
@@ -81,16 +87,26 @@ const Lanada = (function() {
     code = code.replace(/repeat/g, 'do{');
     code = code.replace(/until\s+(.*)/g, '}while(!($1))');
     code = code.replace(/\bend\b/g, '}');
+
     return code;
   }
 
   return {
-    run: function(code, outputCallback=console.log) {
+    createEnv: createEnv,
+    preprocessLua: preprocessLua,
+    run: function(code, outputCallback = console.log) {
       const env = createEnv(outputCallback);
       try {
         const jsCode = preprocessLua(code);
-        const func = new Function(...Object.keys(env), jsCode);
-        func(...Object.values(env));
+
+        // Wrap with 'with(env)' so dot-access works
+        const func = new Function('env', `
+          with(env){
+            ${jsCode}
+          }
+        `);
+        func(env);
+
       } catch(err) {
         outputCallback('Error: ' + err.message);
       }
