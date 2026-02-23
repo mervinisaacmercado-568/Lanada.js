@@ -1,6 +1,7 @@
-// Lanada.js – full 200+ functions
+// Lanada.js – full 200+ function Lua engine
 const Lanada = (function() {
 
+  // Create Lua-like environment
   function createEnv(outputCallback) {
     return {
       // Basic I/O
@@ -21,7 +22,7 @@ const Lanada = (function() {
         random: (a,b)=>b!==undefined?Math.floor(Math.random()*(b-a+1))+a:Math.random(),
         round: Math.round, roundEven: (n)=>Math.round(n/2)*2, sin: Math.sin, sqrt: Math.sqrt,
         tan: Math.tan, pi: Math.PI, e: Math.E, clamp: (v,min,max)=>Math.min(Math.max(v,min),max),
-        lerp: (a,b,t)=>a+(b-a)*t, sign: (n)=>n>0?1:n<0?-1:0
+        lerp: (a,b,t)=>a+(b-a)*t, sign: (n)=>n>0?1:n<0?-1:0,
       },
 
       // String library
@@ -77,19 +78,20 @@ const Lanada = (function() {
         traceback: (msg)=>"Traceback: "+msg
       },
 
-      // Helpers
+      // Extra helpers
       isNumber: (v)=>typeof v==='number',
       isString: (v)=>typeof v==='string',
       deepCopy: (obj)=>JSON.parse(JSON.stringify(obj)),
       range: (start,end)=>{let a=[];for(let i=start;i<=end;i++)a.push(i);return a;},
       median: (arr)=>{let s=[...arr].sort((a,b)=>a-b);let mid=Math.floor(s.length/2); return s.length%2===0?(s[mid-1]+s[mid])/2:s[mid];},
-      randomChoice: (arr)=>arr[Math.floor(Math.random()*arr.length)]
+      randomChoice: (arr)=>arr[Math.floor(Math.random()*arr.length)],
     };
   }
 
+  // Preprocessor Lua -> JS with semicolons
   function preprocessLua(code) {
     code = code.replace(/--.*$/gm,""); // remove comments
-    code = code.replace(/\blocal\s+/g, 'var ');
+    code = code.replace(/\blocal\s+/g, 'var '); // local -> var
     code = code.replace(/function\s+(\w+)\s*\((.*?)\)/g, 'function $1($2){');
     code = code.replace(/if\s+(.*?)\s*then/g, 'if($1){');
     code = code.replace(/elseif\s+(.*?)\s*then/g, '}else if($1){');
@@ -98,6 +100,8 @@ const Lanada = (function() {
     code = code.replace(/repeat/g, 'do{');
     code = code.replace(/until\s+(.*)/g, '}while(!($1))');
     code = code.replace(/\bend\b/g, '}');
+    // Add semicolons for JS parser
+    code = code.split('\n').map(line => line.trim()).join(';\n');
     return code;
   }
 
